@@ -6,15 +6,22 @@
  * \ingroup spseq
  */
 
+#include "AS_asset_representation.hh"
+
 #include "BLI_listbase.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_scene_types.h"
+#include "DNA_sequence_types.h"
 
 #include "DEG_depsgraph.hh"
 
 #include "BKE_context.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
+#include "BKE_report.hh"
 
+#include "ED_asset.hh"
 #include "ED_sequencer.hh"
 
 #include "WM_api.hh"
@@ -24,6 +31,7 @@
 #include "RNA_enum_types.hh"
 
 #include "SEQ_modifier.hh"
+#include "SEQ_modifiertypes.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_select.hh"
 #include "SEQ_sound.hh"
@@ -500,6 +508,86 @@ void SEQUENCER_OT_strip_modifier_set_active(wmOperatorType *ot)
   ot->prop = RNA_def_string(
       ot->srna, "modifier", nullptr, MAX_NAME, "Modifier", "Name of the strip modifier to edit");
   RNA_def_property_flag(ot->prop, PROP_HIDDEN);
+}
+
+/** \} */
+
+/* ------------------------------------------------------------------- */
+/** \name Add Compositor Modifier from Asset Operator
+ * \{ */
+
+static wmOperatorStatus strip_modifier_add_compositor_from_asset_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_sequencer_scene(C);
+  Strip *strip = seq::select_active_get(scene);
+
+  if (!strip) {
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Get the asset from the operator properties. */
+  const asset_system::AssetRepresentation *asset =
+      asset::operator_asset_reference_props_get_asset_from_all_library(*C, *op->ptr, op->reports);
+  if (!asset) {
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Load the asset as a node group. */
+  bNodeTree *node_group = reinterpret_cast<bNodeTree *>(
+      asset::asset_local_id_ensure_imported(*bmain, *asset));
+  if (!node_group) {
+    BKE_report(op->reports, RPT_ERROR, "Failed to load node group asset");
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Verify it's a compositor node tree. */
+  if (node_group->type != NTREE_COMPOSIT) {
+    BKE_report(op->reports, RPT_ERROR, "Asset is not a compositor node group");
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Create a compositor modifier. */
+  StripModifierData *smd = seq::modifier_new(strip, nullptr, eSeqModifierType_Compositor);
+  seq::modifier_persistent_uid_init(*strip, *smd);
+
+  /* Set the node group on the compositor modifier. */
+  SequencerCompositorModifierData *comp_mod = reinterpret_cast<SequencerCompositorModifierData *>(
+      smd);
+  comp_mod->node_group = node_group;
+  id_us_plus(&node_group->id);
+
+  seq::relations_invalidate_cache(scene, strip);
+  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+
+  return OPERATOR_FINISHED;
+}
+
+static bool strip_modifier_add_compositor_from_asset_poll(bContext *C)
+{
+  Scene *scene = CTX_data_sequencer_scene(C);
+  Strip *strip = seq::select_active_get(scene);
+
+  /* Only allow for video strips (not sound). */
+  if (!strip || ELEM(strip->type, STRIP_TYPE_SOUND)) {
+    return false;
+  }
+
+  return sequencer_strip_editable_poll(C);
+}
+
+void SEQUENCER_OT_strip_modifier_add_compositor_from_asset(wmOperatorType *ot)
+{
+  ot->name = "Add Compositor Modifier from Asset";
+  ot->idname = "SEQUENCER_OT_strip_modifier_add_compositor_from_asset";
+  ot->description = "Add a compositor modifier to the strip using a node group asset";
+
+  ot->exec = strip_modifier_add_compositor_from_asset_exec;
+  ot->poll = strip_modifier_add_compositor_from_asset_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+
+  asset::operator_asset_reference_props_register(*ot->srna);
 }
 
 /** \} */

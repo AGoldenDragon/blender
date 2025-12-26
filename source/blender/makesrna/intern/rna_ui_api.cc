@@ -923,6 +923,15 @@ static void rna_uiLayout_template_node_asset_menu_items(Layout *layout,
       *layout, *C, StringRef(catalog_path), blender::ui::NodeAssetMenuOperatorType(operator_type));
 }
 
+static void rna_uiLayout_template_sequencer_compositor_asset_menu_items(Layout *layout,
+                                                                        bContext *C,
+                                                                        const char *catalog_path)
+{
+  using namespace blender;
+  ed::space_node::ui_template_sequencer_compositor_asset_menu_items(
+      *layout, *C, StringRef(catalog_path));
+}
+
 static void rna_uiLayout_template_node_operator_asset_menu_items(Layout *layout,
                                                                  bContext *C,
                                                                  const char *catalog_path)
@@ -2194,6 +2203,13 @@ void RNA_api_ui_layout(StructRNA *srna)
                       int(blender::ui::NodeAssetMenuOperatorType::Add),
                       "Operator",
                       "The operator the asset menu will use");
+
+  func = RNA_def_function(
+      srna,
+      "template_sequencer_compositor_asset_menu_items",
+      "rna_uiLayout_template_sequencer_compositor_asset_menu_items");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  parm = RNA_def_string(func, "catalog_path", nullptr, 0, "", "");
 
   func = RNA_def_function(srna,
                           "template_modifier_asset_menu_items",

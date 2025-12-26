@@ -381,4 +381,38 @@ void ui_template_node_asset_menu_items(ui::Layout &layout,
   col->menu_contents("NODE_MT_node_catalog_assets");
 }
 
+void ui_template_sequencer_compositor_asset_menu_items(ui::Layout &layout,
+                                                       const bContext &C,
+                                                       const StringRef catalog_path)
+{
+  const AssetLibraryReference library = asset_system::all_library_reference();
+  AssetFilterSettings type_filter{};
+  type_filter.id_types = FILTER_ID_NT;
+
+  /* Filter for compositor node trees only. */
+  auto meta_data_filter = [&](const AssetMetaData &meta_data) {
+    const IDProperty *tree_type = BKE_asset_metadata_idprop_find(&meta_data, "type");
+    if (tree_type == nullptr || IDP_int_get(tree_type) != NTREE_COMPOSIT) {
+      return false;
+    }
+    return true;
+  };
+
+  asset::AssetItemTree tree = asset::build_filtered_all_catalog_tree(
+      library, C, type_filter, meta_data_filter);
+
+  const asset_system::AssetCatalogTreeItem *item = tree.catalogs.find_item(catalog_path);
+  if (!item) {
+    return;
+  }
+
+  /* Use the sequencer operator for adding compositor modifiers. */
+  StringRef operator_id = "SEQUENCER_OT_strip_modifier_add_compositor_from_asset";
+
+  ui::Layout *col = &layout.column(false);
+  col->context_string_set("asset_catalog_path", item->catalog_path().str());
+  col->context_string_set("operator_id", operator_id);
+  col->menu_contents("NODE_MT_node_catalog_assets");
+}
+
 }  // namespace blender::ed::space_node

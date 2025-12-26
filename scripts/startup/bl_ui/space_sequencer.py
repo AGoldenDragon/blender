@@ -1499,6 +1499,10 @@ class SEQUENCER_MT_modifier_add(Menu):
             self.operator_modifier_add(layout, 'TONEMAP')
             self.operator_modifier_add(layout, 'WHITE_BALANCE')
 
+            # Add compositor node assets
+            layout.separator()
+            layout.template_sequencer_compositor_asset_menu_items(catalog_path="")
+
 
 class SequencerButtonsPanel:
     bl_space_type = 'SEQUENCE_EDITOR'
